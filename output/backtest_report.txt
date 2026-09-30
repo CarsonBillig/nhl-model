@@ -1,0 +1,40 @@
+NHL walk-forward backtest, regular season 2019-2027: 8515 games
+
+A. PICKING WINNERS (every game)
+ season  games  model_right  home_team_right  log_loss  coinflip_log_loss
+2019-20   1082        0.559            0.533     0.679              0.691
+2020-21    868        0.607            0.533     0.660              0.691
+2021-22   1312        0.643            0.537     0.644              0.690
+2022-23   1312        0.609            0.524     0.658              0.692
+2023-24   1312        0.598            0.541     0.662              0.690
+2024-25   1312        0.588            0.562     0.662              0.685
+2025-26   1312        0.546            0.522     0.683              0.692
+2026-27      5        0.600            0.400     0.801              0.673
+all: model right 59.3%, always-home 53.6%
+
+B. CALIBRATION (does 60% mean 60%?)
+   games  predicted  actual
+0   1065      0.329   0.355
+1   1064      0.426   0.434
+2   1064      0.478   0.486
+3   1065      0.518   0.490
+4   1064      0.554   0.573
+5   1064      0.593   0.570
+6   1064      0.642   0.648
+7   1065      0.732   0.734
+
+C. VS THE SPORTSBOOK (ESPN lines, 2624 games, 2624 with opening lines)
+  log loss: model 0.6728 | closing line 0.6699 | opening line 0.6725  (lower is better)
+  winners: model 56.7% | closing-line favorite 58.3%
+  line movement: the market moves 27% of the way from the open toward the model (t=24.5)
+
+  Moneyline bets when the model's win chance beats the sportsbook's (de-vigged) by the edge shown:
+bet at edge >=  bets  won   units    roi  beat_close
+  open      2%  1760  895  24.543  0.014       0.632
+  open      4%  1067  547  46.915  0.044       0.710
+  open      6%   583  296  30.242  0.052       0.768
+ close      2%  1723  839 -33.817 -0.020         NaN
+ close      4%   937  443 -22.088 -0.024         NaN
+ close      6%   464  216  -2.991 -0.006         NaN
+  puck line: favorite -1.5 predicted 33.4% vs covered 36.0% (correction fitted)
+  totals: over predicted 48.2% vs hit 48.0% (correction fitted)

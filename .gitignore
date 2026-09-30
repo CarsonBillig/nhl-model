@@ -1,0 +1,10 @@
+# local Python install (setup.bat recreates it)
+.venv/
+__pycache__/
+*.pyc
+
+# large raw downloads (re-downloaded automatically when missing)
+cache/all_teams.csv
+cache/*.zip
+cache/odds_fetch.log
+*.zip
