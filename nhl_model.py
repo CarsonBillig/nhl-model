@@ -82,7 +82,7 @@ def load_games(refresh_current: bool = False) -> tuple[pd.DataFrame, pd.DataFram
     sched["date"] = pd.to_datetime(sched["date"])
     sched["played"] = sched["state"].isin(["OFF", "FINAL"]) & sched["home_score"].notna()
     tg = nhl_data.team_games()
-    gg = pd.concat([nhl_data.goalie_games(s, refresh=refresh_current and s == cur)
+    gg = pd.concat([nhl_data.goalie_games(s)          # saved copies only: no MoneyPuck downloads
                     for s in range(nhl_data.FIRST_SEASON, cur + 1)], ignore_index=True)
 
     # long table: one row per team per game (scheduled games included, stats NaN until played)
@@ -96,7 +96,7 @@ def load_games(refresh_current: bool = False) -> tuple[pd.DataFrame, pd.DataFram
     L["c_tot5"] = L["cf5"] + L["ca5"]
     # The model predicts REGULAR goals; empty-net goals depend on game state (a late 1-2 goal lead), not team
     # strength, so they are added afterwards by the empty-net step in game_probs.
-    en = pd.concat([nhl_data.en_goals(s, refresh=refresh_current and s == cur)
+    en = pd.concat([nhl_data.en_goals(s)
                     for s in range(nhl_data.FIRST_SEASON, cur + 1)], ignore_index=True)
     L = L.merge(en, on=["game_id", "team"], how="left")
     L["en_goals"] = L["en_goals"].fillna(0)

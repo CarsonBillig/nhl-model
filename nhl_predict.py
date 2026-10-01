@@ -219,11 +219,8 @@ def summary(led: pd.DataFrame):
 # ------------------------------------------------------------------------------------------ main
 def run(days: int = 3):
     cur = nhl_data.current_season()
-    # refresh this season's data (MoneyPuck team file only if older than 12 hours: it is ~125 MB)
-    f = nhl_data.CACHE / "all_teams.csv"
-    if not f.exists() or (datetime.now().timestamp() - f.stat().st_mtime) > 12 * 3600:
-        print("refreshing MoneyPuck team stats ...", flush=True)
-        nhl_data.refresh_team_games()
+    # No automatic MoneyPuck downloads: they asked automated users to get a data licence. Team and goalie stats come
+    # from the copy already saved in cache/; the schedule, scores and lines still refresh from the NHL API and ESPN.
     sched, L, G = m.load_games(refresh_current=True)
     led = grade(sched)
     summary(led if not led.empty else load_ledger())
@@ -308,13 +305,13 @@ def run(days: int = 3):
             "game_id": r["game_id"], "start_utc": r["start_utc"], "away": r["away"], "home": r["home"],
             "away_goalie": ag[1], "home_goalie": hg[1],
             "goalie_status": "confirmed" if ("confirmed" in ag[2] and "confirmed" in hg[2]) else "projected",
-            "proj_away": round(r["lam_a"], 2), "proj_home": round(r["lam_h"], 2), "p_home_win": round(ph, 4),
+            "proj_away": round(float(pr["exp_away"][i]), 2), "proj_home": round(float(pr["exp_home"][i]), 2), "p_home_win": round(ph, 4),
             "fair_home_ml": fair_ml(ph).item(), "fair_away_ml": fair_ml(1 - ph).item(),
             "home_ml": r["close_home_ml"], "away_ml": r["close_away_ml"], "open_home_ml": r["open_home_ml"], "open_away_ml": r["open_away_ml"],
             "p_mkt_home": r["p_mkt_home"], "pick": r["home"] if pick_home else r["away"],
             "pick_prob": round(ph if pick_home else 1 - ph, 4), "pick_ml": r["close_home_ml"] if pick_home else r["close_away_ml"],
             "value_side": value_side, "value_edge": value_edge, "value_ml": value_ml,
-            "total_line": r["close_total"], "proj_total": round(r["lam_h"] + r["lam_a"], 2), "p_over": p_over,
+            "total_line": r["close_total"], "proj_total": round(float(pr["exp_home"][i] + pr["exp_away"][i]), 2), "p_over": p_over,
             "total_lean": lean_by_value(p_over, p_under, r.get("close_over_odds"), r.get("close_under_odds"), "Over", "Under"),
             "pl_home_line": pl_line, "p_home_pl": round(p_home_pl, 4),
             "pl_lean": lean_by_value(p_home_pl, 1 - p_home_pl, r.get("close_home_pl_odds"), r.get("close_away_pl_odds"),

@@ -8,3 +8,9 @@ cache/all_teams.csv
 cache/*.zip
 cache/odds_fetch.log
 *.zip
+
+# data derived from MoneyPuck (licensed for personal use; keep it off the public repo)
+cache/team_games.parquet
+cache/goalie_games_*.parquet
+cache/en_goals_*.parquet
+cache/en_goals.parquet

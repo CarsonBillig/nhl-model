@@ -86,7 +86,7 @@ def team_games() -> pd.DataFrame:
     """One row per team per game: all-situation, 5v5, power-play and penalty-kill stats (MoneyPuck)."""
     f = CACHE / "team_games.parquet"
     src = CACHE / "all_teams.csv"
-    if f.exists() and f.stat().st_mtime >= src.stat().st_mtime:
+    if f.exists() and (not src.exists() or f.stat().st_mtime >= src.stat().st_mtime):
         return pd.read_parquet(f)
     cols = ["team", "season", "gameId", "situation", "home_or_away", "gameDate", "playoffGame", "iceTime",
             "xGoalsFor", "xGoalsAgainst", "scoreVenueAdjustedxGoalsFor", "scoreVenueAdjustedxGoalsAgainst",
@@ -110,7 +110,8 @@ def team_games() -> pd.DataFrame:
 
 
 def refresh_team_games():
-    """Re-download MoneyPuck's team file (~125 MB) - do this during the season so last night's games are included."""
+    """Re-download MoneyPuck's team file (~125 MB). NOT called automatically: MoneyPuck asks automated users for a data
+    licence. Only use this if you have one."""
     r = requests.get("https://moneypuck.com/moneypuck/playerData/careers/gameByGame/all_teams.csv", timeout=300)
     r.raise_for_status()
     (CACHE / "all_teams.csv").write_bytes(r.content)
@@ -123,11 +124,8 @@ def goalie_games(season: int, refresh: bool = False) -> pd.DataFrame:
     z = CACHE / f"shots_{season}.zip"
     if f.exists() and not refresh and (not z.exists() or f.stat().st_mtime >= z.stat().st_mtime):
         return pd.read_parquet(f)
-    if not z.exists() or refresh:
-        r = requests.get(f"https://peter-tanner.com/moneypuck/downloads/shots_{season}.zip", timeout=300)
-        if r.status_code != 200:
-            return pd.DataFrame()
-        z.write_bytes(r.content)
+    if not z.exists():
+        return pd.DataFrame(columns=["game_id", "team", "goalie_id", "goalie", "xga", "ga", "shots", "started", "season"])
     zf = zipfile.ZipFile(z)
     s = pd.read_csv(zf.open(zf.namelist()[0]), usecols=["season", "game_id", "isPlayoffGame", "teamCode", "homeTeamCode", "awayTeamCode",
                                                         "goalieIdForShot", "goalieNameForShot", "xGoal", "goal", "shotOnEmptyNet", "period", "time"],
@@ -156,8 +154,6 @@ def en_goals(season: int, refresh: bool = False) -> pd.DataFrame:
     z = CACHE / f"shots_{season}.zip"
     if f.exists() and not refresh and (not z.exists() or f.stat().st_mtime >= z.stat().st_mtime):
         return pd.read_parquet(f)
-    if not z.exists():
-        goalie_games(season, refresh=True)            # downloads the shot file
     if not z.exists():
         return pd.DataFrame(columns=["game_id", "team", "en_goals"])
     zf = zipfile.ZipFile(z)
