@@ -150,6 +150,26 @@ def goalie_games(season: int, refresh: bool = False) -> pd.DataFrame:
     return g
 
 
+def en_goals(season: int, refresh: bool = False) -> pd.DataFrame:
+    """Empty-net goals per game and team (from MoneyPuck shot files; regulation and OT)."""
+    f = CACHE / f"en_goals_{season}.parquet"
+    z = CACHE / f"shots_{season}.zip"
+    if f.exists() and not refresh and (not z.exists() or f.stat().st_mtime >= z.stat().st_mtime):
+        return pd.read_parquet(f)
+    if not z.exists():
+        goalie_games(season, refresh=True)            # downloads the shot file
+    if not z.exists():
+        return pd.DataFrame(columns=["game_id", "team", "en_goals"])
+    zf = zipfile.ZipFile(z)
+    s = pd.read_csv(zf.open(zf.namelist()[0]), usecols=["season", "game_id", "isPlayoffGame", "teamCode", "goal", "shotOnEmptyNet"],
+                    low_memory=False)
+    s = s[(s["goal"] == 1) & (s["shotOnEmptyNet"] == 1)]
+    s["game_id"] = s["season"] * 1_000_000 + (np.where(s["isPlayoffGame"] == 1, 30000, 20000) + s["game_id"] % 10000)
+    out = s.assign(team=s["teamCode"].map(code)).groupby(["game_id", "team"]).size().rename("en_goals").reset_index()
+    out.to_parquet(f)
+    return out
+
+
 def current_goalies(team: str) -> list[dict]:
     """Goalies on a team's roster right now (NHL API), to handle off-season moves."""
     js = _get(f"{NHL}/roster/{team}/current")

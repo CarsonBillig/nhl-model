@@ -94,7 +94,13 @@ def load_games(refresh_current: bool = False) -> tuple[pd.DataFrame, pd.DataFram
     L = pd.concat(rows, ignore_index=True)
     L = L.merge(tg.drop(columns=["season", "home_or_away", "gameDate", "playoffGame", "is_home"]), on=["game_id", "team"], how="left")
     L["c_tot5"] = L["cf5"] + L["ca5"]
-    L["goals"] = L["gf"]
+    # The model predicts REGULAR goals; empty-net goals depend on game state (a late 1-2 goal lead), not team
+    # strength, so they are added afterwards by the empty-net step in game_probs.
+    en = pd.concat([nhl_data.en_goals(s, refresh=refresh_current and s == cur)
+                    for s in range(nhl_data.FIRST_SEASON, cur + 1)], ignore_index=True)
+    L = L.merge(en, on=["game_id", "team"], how="left")
+    L["en_goals"] = L["en_goals"].fillna(0)
+    L["goals"] = L["gf"] - L["en_goals"]
     L.loc[~L["played"], [c for c in tg.columns if c not in ("team", "season", "game_id", "home_or_away", "gameDate", "playoffGame", "is_home")]] = np.nan
 
     # team ratings (pre-game)
@@ -164,20 +170,50 @@ MAXG = 15
 _K = np.arange(MAXG + 1)
 
 
+# Empty-net step, measured on 13,170 games (2016-26): when a team leads by m REGULAR (non-empty-net) goals, the chance it
+# adds 0 / 1 / 2 empty-net goals. Up 1 or 2, trailing teams pull their goalie and the leader often scores into the empty net.
+EN_TABLE = {1: (0.707, 0.251, 0.042), 2: (0.413, 0.574, 0.013), 3: (0.758, 0.241, 0.001), 4: (0.963, 0.036, 0.001)}
+_KF = np.arange(MAXG + 3)
+
+
+def _with_empty_net(joint: np.ndarray) -> np.ndarray:
+    """Turn a [game, home, away] distribution of regular goals into one of final goals (empty-netters added)."""
+    n, k = joint.shape[0], joint.shape[1]
+    final = np.zeros((n, k + 2, k + 2))
+    for h in range(k):
+        for a in range(k):
+            p = joint[:, h, a]
+            m = h - a
+            probs = EN_TABLE.get(abs(m), (1.0, 0.0, 0.0))
+            for extra, q in enumerate(probs):
+                if q == 0:
+                    continue
+                if m > 0:
+                    final[:, h + extra, a] += p * q
+                elif m < 0:
+                    final[:, h, a + extra] += p * q
+                else:
+                    final[:, h, a] += p * q if extra == 0 else 0.0
+    return final
+
+
 def game_probs(lam_h, lam_a, total_line=None, home_pl=-1.5) -> dict:
-    """Independent Poisson goals (regulation + OT). Ties go to OT/shootout, split by relative strength."""
+    """Poisson REGULAR goals (regulation + OT), then the empty-net step. Ties go to OT/shootout, split by strength.
+
+    Empty-net goals never change the winner, but they turn many 1-goal wins into 2-goal wins (puck line) and push totals up."""
     lam_h, lam_a = np.atleast_1d(lam_h).astype(float), np.atleast_1d(lam_a).astype(float)
     ph = poisson.pmf(_K[None, :], lam_h[:, None])
     pa = poisson.pmf(_K[None, :], lam_a[:, None])
-    joint = ph[:, :, None] * pa[:, None, :]                      # [game, home goals, away goals]
-    diff = _K[:, None] - _K[None, :]
+    joint = _with_empty_net(ph[:, :, None] * pa[:, None, :])         # [game, home goals, away goals], final
+    diff = _KF[:, None] - _KF[None, :]
     p_home_reg = (joint * (diff > 0)).sum((1, 2))
     p_tie = (joint * (diff == 0)).sum((1, 2))
     ot_home = 0.5 + 0.5 * (lam_h - lam_a) / (lam_h + lam_a)      # OT/SO: slight edge to the better team
     out = {"p_home_win": p_home_reg + p_tie * ot_home, "p_tie_reg": p_tie,
-           "p_home_cover_m15": (joint * (diff >= 2)).sum((1, 2))}   # home -1.5 needs a 2+ goal win (OT wins are by 1)
+           "p_home_cover_m15": (joint * (diff >= 2)).sum((1, 2)),   # home -1.5 needs a 2+ goal win (OT wins are by 1)
+           "exp_home": (joint.sum(2) * _KF).sum(1), "exp_away": (joint.sum(1) * _KF).sum(1)}
     out["p_away_cover_p15"] = 1 - out["p_home_cover_m15"]
-    tot = _K[:, None] + _K[None, :]
+    tot = _KF[:, None] + _KF[None, :]
     if total_line is not None:
         tl = np.asarray(total_line, float)[:, None, None]
         out["p_over"] = (joint * (tot[None] > tl)).sum((1, 2))

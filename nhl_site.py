@@ -590,8 +590,10 @@ $ribbon
   <h2>How the model works</h2>
   <p>Built the way Rob Pizzola lays out a hockey model: team ratings from 5-on-5 expected goals, shot share, power play and penalty kill
   (recency-weighted, with last season fading as a stabiliser), a goalie model of goals saved above expected (shrunk toward average for
-  small samples), and game-day factors (starting goalies, home ice, back-to-backs). A Poisson model turns those into each team's expected goals,
-  then win chance, puck line and total. Backtest 2019–26: 59.3% winners with calibrated probabilities.</p>
+  small samples), and game-day factors (starting goalies, home ice, back-to-backs). A Poisson model turns those into each team's expected
+  <b>regular</b> goals. Then an <b>empty-net step</b> adds what history says happens late: about 30% of games have an empty-net goal, and a team
+  up 1 adds one 29% of the time, up 2 about 59% (that's what turns 3–2 into 4–2 and swings puck lines and totals). Those give win chance,
+  puck line and total. Backtest 2019–26: 59.2% winners with calibrated probabilities.</p>
 </div>
 </main>
 <div class="modal" id="modal" role="dialog" aria-modal="true" aria-label="Matchup view"><div class="m-panel">

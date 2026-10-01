@@ -38,8 +38,10 @@ the model's goal-count probabilities haven't been tested against those markets.
 2. **Goalie model:** goals saved above expected per expected goal faced, weighted toward recent seasons and pulled
    hard toward league average until a goalie has faced a real sample.
 3. **Game day:** starting goalies, home ice, back-to-backs.
-4. **Prices:** a Poisson regression gives each team's expected goals. Those become win chance (ties go to OT/shootout),
-   puck line and total, with win chances calibrated on past seasons.
+4. **Prices:** a Poisson regression gives each team's expected **regular** (non-empty-net) goals. An **empty-net step**
+   then adds late empty-netters the way they actually happen (measured on 13,170 games: a team up 1 adds one 29% of the
+   time, up 2 about 59%). Those become win chance (ties go to OT/shootout), puck line and total, calibrated on past
+   seasons and corrected against 2024–26 closing prices.
 
 ## Known limits
 
