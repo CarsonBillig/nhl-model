@@ -335,7 +335,6 @@ def card(r):
     <div class="pickrow"><span class="lbl">Model pick</span><span class="val">{r['pick']} ML {odds(r.get('pick_ml'))} <i>{pct(r['pick_prob'])}</i> {pick_res}</span></div>
     {value}
   </div>
-  {confidence(r)}
   {stats_html(r)}
   <button class="open-mx" type="button">Open matchup view <span aria-hidden="true">↗</span></button>
   <template class="mx">{matchup_view(r)}</template>
@@ -581,9 +580,10 @@ $ribbon
   <p><b>Value bet</b>: the model's win chance beats the sportsbook's (after removing its margin) by 6+ points. In the 2024–26 test those bets
   returned about +2.6% to +5% when placed at the <b>opening</b> line and beat the closing line ~70% of the time, but lost at the closing line.
   So run it in the morning and bet value picks early.</p>
-  <p><b>Confidence</b>: each bet's hit chance (dark bar), the win rate the price needs to break even (tick), and the cushion between them.
-  All three were tested against 2024–26 closing prices and corrected so the percentages are honest. Only the <b>moneyline</b> showed an edge
-  (value bets placed early). <b>Puck line and total are marked "lean only"</b>: betting the model's side there came out about break-even.</p>
+  <p><b>Matchup view</b>: click any game to see the chance of every bet hitting (both moneylines, both puck-line sides, over and under)
+  next to what each price needs to break even, plus a graph of every team stat. All were tested against 2024–26 closing prices and
+  corrected so the percentages are honest. Only the <b>moneyline</b> showed an edge (value bets placed early); puck line and total are
+  "lean only", since betting the model's side there came out about break-even.</p>
   <h2>Pick history</h2>
   <p>Every pick is logged before puck drop and locked when the game starts; the next run grades it. <b>Beat close</b> shows whether a value
   bet's price was better than the closing price, the fastest honest sign that the edge is real.</p>
