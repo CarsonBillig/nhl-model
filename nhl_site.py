@@ -598,7 +598,7 @@ $ribbon
 </main>
 <div class="modal" id="modal" role="dialog" aria-modal="true" aria-label="Matchup view"><div class="m-panel">
   <button class="m-close" id="m-close" aria-label="Close">✕</button><div id="m-body"></div></div></div>
-<footer>Research and entertainment only. No model guarantees profit; bet responsibly. Data: NHL API, MoneyPuck.com, ESPN / DraftKings.</footer>
+<footer>Research and entertainment only. No model guarantees profit; bet responsibly. Data: NHL official API (play-by-play, schedules), ESPN / DraftKings lines. Expected goals: our own model.</footer>
 </div>
 <script>
 (function(){

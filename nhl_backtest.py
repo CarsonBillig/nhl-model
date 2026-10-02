@@ -17,7 +17,7 @@ from scipy.stats import binomtest
 import nhl_model as m
 
 OUT = Path("output")
-FIRST_TEST, REFIT_DAYS = 2019, 14
+FIRST_TEST, REFIT_DAYS = 2022, 14
 LOG: list[str] = []
 
 

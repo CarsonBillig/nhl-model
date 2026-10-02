@@ -32,15 +32,15 @@ the model's goal-count probabilities haven't been tested against those markets.
 ## How it works
 
 1. **Team ratings** (Rob's Corsi / shooting / save framework, modernised): 5-on-5 expected goals for and against per 60
-   minutes (score and venue adjusted), shot-attempt share, power-play and penalty-kill expected goals, penalty
+   minutes, shot-attempt share, power-play and penalty-kill expected goals, penalty
    tendencies, and finishing (goals minus expected goals, shrunk heavily because shooting luck regresses).
    Recency-weighted; last season carries over as a stabiliser and fades as the new season's games pile up.
 2. **Goalie model:** goals saved above expected per expected goal faced, weighted toward recent seasons and pulled
    hard toward league average until a goalie has faced a real sample.
 3. **Game day:** starting goalies, home ice, back-to-backs.
 4. **Prices:** a Poisson regression gives each team's expected **regular** (non-empty-net) goals. An **empty-net step**
-   then adds late empty-netters the way they actually happen (measured on 13,170 games: a team up 1 adds one 29% of the
-   time, up 2 about 59%). Those become win chance (ties go to OT/shootout), puck line and total, calibrated on past
+   then adds late empty-netters the way they actually happen (measured on 7,440 games since 2020: a team up 1 adds one
+   about 32% of the time, up 2 about 66%). Those become win chance (ties go to OT/shootout), puck line and total, calibrated on past
    seasons and corrected against 2024–26 closing prices.
 
 ## Known limits
@@ -50,4 +50,10 @@ the model's goal-count probabilities haven't been tested against those markets.
   small sample), but treat very large edges (10%+) with suspicion: they often mean the model is missing news.
 - **No skater injuries yet** (Rob's player-value-above-replacement adjustment). That's the natural next step.
 
-Data: NHL API, MoneyPuck.com (free for non-commercial use, with credit), ESPN / DraftKings lines.
+Data: the NHL's official API (play-by-play, schedules, rosters) and ESPN / DraftKings lines. Expected goals come from
+our own model (`nhl_xg.py`): each season's shots are valued by a model trained only on earlier seasons, so the
+backtest never sees the future. No third-party stats.
+
+The first run on a new computer downloads every game's play-by-play since 2020-21 (about 8,000 games, one request per
+second, so roughly 2-3 hours, and longer if the NHL's server asks it to slow down). After that, each daily run only
+fetches the previous night's games.

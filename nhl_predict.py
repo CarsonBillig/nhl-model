@@ -219,8 +219,7 @@ def summary(led: pd.DataFrame):
 # ------------------------------------------------------------------------------------------ main
 def run(days: int = 3):
     cur = nhl_data.current_season()
-    # No automatic MoneyPuck downloads: they asked automated users to get a data licence. Team and goalie stats come
-    # from the copy already saved in cache/; the schedule, scores and lines still refresh from the NHL API and ESPN.
+    # Everything refreshes from the NHL's official API (new games' play-by-play is fetched once and cached) and ESPN.
     sched, L, G = m.load_games(refresh_current=True)
     led = grade(sched)
     summary(led if not led.empty else load_ledger())
@@ -329,6 +328,15 @@ def run(days: int = 3):
     for d, sub in picks.groupby("date"):
         sub.to_csv(OUT / f"picks_{d}.csv", index=False)
     n = record(picks)
+    # line snapshot: today's prices at the time of this run (builds our own open -> close record for testing timing)
+    snap = picks[pd.to_datetime(picks["start_utc"], utc=True) > pd.Timestamp.now(tz="UTC")]
+    snap = snap.assign(snapshot_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))[
+        ["snapshot_at", "date", "game_id", "start_utc", "away", "home", "away_goalie", "home_goalie", "goalie_status",
+         "home_ml", "away_ml", "open_home_ml", "open_away_ml", "total_line", "over_odds", "under_odds", "pl_home_line",
+         "home_pl_odds", "away_pl_odds", "p_home_win", "proj_away", "proj_home"]]
+    if len(snap):
+        f = OUT / "line_snapshots.csv"
+        snap.to_csv(f, mode="a", header=not f.exists(), index=False)
     led = load_ledger()
     history_csv(led)
     print_board(picks)

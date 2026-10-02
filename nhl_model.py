@@ -1,6 +1,6 @@
 """NHL model, following the structure Rob Pizzola describes (team ratings -> goalie model -> game-day adjustments -> prices):
 
-  1. Team ratings: 5v5 expected goals for/against per 60 (score & venue adjusted), shot-attempt share (Corsi), power-play
+  1. Team ratings: 5v5 expected goals for/against per 60 (our own xG), shot-attempt share (Corsi), power-play
      and penalty-kill xG rates, penalty tendencies, finishing (goals minus xG, heavily shrunk). Recency-weighted, and the
      previous season carries over as a stabiliser that fades as the new season's games pile up.
   2. Goalie ratings: goals saved above expected per expected goal faced, recency-weighted over several seasons and
@@ -81,8 +81,8 @@ def load_games(refresh_current: bool = False) -> tuple[pd.DataFrame, pd.DataFram
                        for s in range(nhl_data.FIRST_SEASON, cur + 1)], ignore_index=True)
     sched["date"] = pd.to_datetime(sched["date"])
     sched["played"] = sched["state"].isin(["OFF", "FINAL"]) & sched["home_score"].notna()
-    tg = nhl_data.team_games()
-    gg = pd.concat([nhl_data.goalie_games(s)          # saved copies only: no MoneyPuck downloads
+    tg = nhl_data.team_games(refresh_current=refresh_current)
+    gg = pd.concat([nhl_data.goalie_games(s)
                     for s in range(nhl_data.FIRST_SEASON, cur + 1)], ignore_index=True)
 
     # long table: one row per team per game (scheduled games included, stats NaN until played)
@@ -95,10 +95,7 @@ def load_games(refresh_current: bool = False) -> tuple[pd.DataFrame, pd.DataFram
     L = L.merge(tg.drop(columns=["season", "home_or_away", "gameDate", "playoffGame", "is_home"]), on=["game_id", "team"], how="left")
     L["c_tot5"] = L["cf5"] + L["ca5"]
     # The model predicts REGULAR goals; empty-net goals depend on game state (a late 1-2 goal lead), not team
-    # strength, so they are added afterwards by the empty-net step in game_probs.
-    en = pd.concat([nhl_data.en_goals(s)
-                    for s in range(nhl_data.FIRST_SEASON, cur + 1)], ignore_index=True)
-    L = L.merge(en, on=["game_id", "team"], how="left")
+    # strength, so they are added afterwards by the empty-net step in game_probs. (en_goals comes with the team stats.)
     L["en_goals"] = L["en_goals"].fillna(0)
     L["goals"] = L["gf"] - L["en_goals"]
     L.loc[~L["played"], [c for c in tg.columns if c not in ("team", "season", "game_id", "home_or_away", "gameDate", "playoffGame", "is_home")]] = np.nan
@@ -170,9 +167,10 @@ MAXG = 15
 _K = np.arange(MAXG + 1)
 
 
-# Empty-net step, measured on 13,170 games (2016-26): when a team leads by m REGULAR (non-empty-net) goals, the chance it
-# adds 0 / 1 / 2 empty-net goals. Up 1 or 2, trailing teams pull their goalie and the leader often scores into the empty net.
-EN_TABLE = {1: (0.707, 0.251, 0.042), 2: (0.413, 0.574, 0.013), 3: (0.758, 0.241, 0.001), 4: (0.963, 0.036, 0.001)}
+# Empty-net step, measured on 7,440 regular-season games (2020-26, NHL play-by-play): when a team leads by m REGULAR
+# (non-empty-net) goals, the chance it adds 0 / 1 / 2 empty-net goals. Up 1 or 2, trailing teams pull their goalie and
+# the leader often scores into the empty net (more often than a decade ago: coaches pull earlier now).
+EN_TABLE = {1: (0.682, 0.265, 0.053), 2: (0.343, 0.642, 0.015), 3: (0.704, 0.295, 0.001), 4: (0.960, 0.039, 0.001)}
 _KF = np.arange(MAXG + 3)
 
 
