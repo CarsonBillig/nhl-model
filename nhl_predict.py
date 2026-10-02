@@ -48,6 +48,11 @@ def devig(h, a):
     return ph / (ph + pa)
 
 
+def implied(odds) -> float:
+    """Win chance implied by one American price (vig included)."""
+    return float(1 / american_to_decimal(odds))
+
+
 def lean_by_value(p_a, p_b, odds_a, odds_b, label_a, label_b) -> str:
     """The side with the better expected value at the listed prices (-110 if a price is missing).
 
@@ -110,7 +115,7 @@ COLS = ["logged_at", "date", "game_id", "start_utc", "away", "home", "away_goali
         "open_away_ml", "p_mkt_home", "pick", "pick_prob", "pick_ml", "value_side", "value_edge", "value_ml",
         "total_line", "proj_total", "p_over", "total_lean", "pl_home_line", "p_home_pl", "pl_lean",
         "away_score", "home_score", "last_period", "pick_result", "value_result", "value_units", "total_result",
-        "pl_result", "close_home_ml", "close_away_ml", "value_clv"]
+        "pl_result", "close_home_ml", "close_away_ml", "value_clv", "value_logged_at"]
 
 
 def load_ledger():
@@ -122,7 +127,19 @@ def record(new: pd.DataFrame):
     now = pd.Timestamp.now(tz="UTC")
     locked = old["pick_result"].notna() | (pd.to_datetime(old["start_utc"], utc=True) <= now)
     keep = old[locked | ~old["game_id"].isin(new["game_id"])]
-    fresh = new[~new["game_id"].isin(keep["game_id"]) & (pd.to_datetime(new["start_utc"], utc=True) > now)]
+    fresh = new[~new["game_id"].isin(keep["game_id"]) & (pd.to_datetime(new["start_utc"], utc=True) > now)].copy()
+    # A value bet is recorded the FIRST time it is flagged, at that price, and stays recorded on later runs (that is
+    # when it would be bet). Re-running near puck drop would otherwise replace it with the closing price, and the
+    # closing-line check would always read zero.
+    fresh["value_side"] = fresh["value_side"].astype(object)
+    fresh["value_logged_at"] = pd.Series(np.where(fresh["value_side"].notna(), fresh["logged_at"], None), index=fresh.index, dtype=object)
+    prev = old[~locked].drop_duplicates("game_id", keep="last").set_index("game_id")
+    for i in fresh.index:
+        gid = fresh.at[i, "game_id"]
+        if gid in prev.index and isinstance(prev.at[gid, "value_side"], str) and prev.at[gid, "value_side"]:
+            for c in ("value_side", "value_edge", "value_ml"):
+                fresh.at[i, c] = prev.at[gid, c]
+            fresh.at[i, "value_logged_at"] = prev.at[gid, "value_logged_at"] if isinstance(prev.at[gid, "value_logged_at"], str)                 else prev.at[gid, "logged_at"]
     OUT.mkdir(exist_ok=True)
     pd.concat([keep, fresh.reindex(columns=COLS)], ignore_index=True).sort_values(["date", "start_utc", "game_id"]).to_csv(LEDGER, index=False)
     return len(fresh)
@@ -174,10 +191,11 @@ def grade(sched: pd.DataFrame) -> pd.DataFrame:
             ch, ca = cl.loc[key, "close_home_ml"], cl.loc[key, "close_away_ml"]
             led.at[i, "close_home_ml"], led.at[i, "close_away_ml"] = ch, ca
             side = led.at[i, "value_side"]
-            h0, a0 = pd.to_numeric(led.at[i, "home_ml"], errors="coerce"), pd.to_numeric(led.at[i, "away_ml"], errors="coerce")
-            if isinstance(side, str) and side and pd.notna(ch) and pd.notna(h0):
-                p0, p1 = devig(h0, a0), devig(ch, ca)
-                led.at[i, "value_clv"] = round(float((p1 - p0) if side == led.at[i, "home"] else (p0 - p1)), 4)
+            bet = pd.to_numeric(led.at[i, "value_ml"], errors="coerce")
+            if isinstance(side, str) and side and pd.notna(ch) and pd.notna(bet):
+                # closing-line value: how much the price on our side shortened from when the bet was flagged
+                close_side = ch if side == led.at[i, "home"] else ca
+                led.at[i, "value_clv"] = round(float(implied(close_side) - implied(bet)), 4)
     led.to_csv(LEDGER, index=False)
     return led
 
