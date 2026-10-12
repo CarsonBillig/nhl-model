@@ -113,9 +113,9 @@ def projected_starters(games: pd.DataFrame, G: pd.DataFrame, gt: pd.DataFrame) -
 COLS = ["logged_at", "date", "game_id", "start_utc", "away", "home", "away_goalie", "home_goalie", "goalie_status",
         "proj_away", "proj_home", "p_home_win", "fair_home_ml", "fair_away_ml", "home_ml", "away_ml", "open_home_ml",
         "open_away_ml", "p_mkt_home", "pick", "pick_prob", "pick_ml", "value_side", "value_edge", "value_ml",
-        "total_line", "proj_total", "p_over", "total_lean", "pl_home_line", "p_home_pl", "pl_lean",
+        "total_line", "proj_total", "p_over", "total_lean", "pl_home_line", "p_home_pl", "pl_lean", "total_odds", "pl_odds",
         "away_score", "home_score", "last_period", "pick_result", "value_result", "value_units", "total_result",
-        "pl_result", "close_home_ml", "close_away_ml", "value_clv", "value_logged_at"]
+        "pl_result", "close_home_ml", "close_away_ml", "value_clv", "value_logged_at", "total_units", "pl_units"]
 
 
 def load_ledger():
@@ -146,6 +146,13 @@ def record(new: pd.DataFrame):
     return len(fresh)
 
 
+def _units(result, odds) -> float:
+    """Profit of a 1-unit bet at the logged price (-110 when the price wasn't available)."""
+    o = pd.to_numeric(odds, errors="coerce")
+    o = -110.0 if pd.isna(o) else float(o)
+    return {"Win": float(american_to_decimal(o) - 1), "Loss": -1.0}.get(result, 0.0)
+
+
 def grade(sched: pd.DataFrame) -> pd.DataFrame:
     led = load_ledger()
     if led.empty:
@@ -170,11 +177,13 @@ def grade(sched: pd.DataFrame) -> pd.DataFrame:
         tot = hs + as_ - (1 if g["last_period"] == "SO" else 0)
         if pd.notna(tl) and led.at[i, "total_lean"] in ("Over", "Under"):
             led.at[i, "total_result"] = "Push" if tot == tl else ("Win" if (tot > tl) == (led.at[i, "total_lean"] == "Over") else "Loss")
+            led.at[i, "total_units"] = _units(led.at[i, "total_result"], led.at[i, "total_odds"])
         margin = hs - as_
         pl = pd.to_numeric(led.at[i, "pl_home_line"], errors="coerce")
         if pd.notna(pl) and isinstance(led.at[i, "pl_lean"], str):
             home_cov = margin + pl > 0
             led.at[i, "pl_result"] = "Win" if home_cov == led.at[i, "pl_lean"].startswith(g["home"]) else "Loss"
+            led.at[i, "pl_units"] = _units(led.at[i, "pl_result"], led.at[i, "pl_odds"])
     # closing lines + CLV for graded value bets (did the market move toward the pick after it was logged?)
     need = led["pick_result"].notna() & led["close_home_ml"].isna()
     for d in sorted(set(led.loc[need, "date"])):
@@ -231,8 +240,12 @@ def summary(led: pd.DataFrame):
     units = pd.to_numeric(g["value_units"], errors="coerce").sum()
     clv = pd.to_numeric(g["value_clv"], errors="coerce").dropna()
     clv_s = f" | value bets beat the close {(clv > 0).mean():.0%} of the time" if len(clv) else ""
+    def lean_units(col):
+        u = pd.to_numeric(g[col], errors="coerce").dropna()
+        return f" ({u.sum():+.2f} units on {len(u)} with odds logged)" if len(u) else ""
     print(f"\nPick history: {len(g)} graded | winners {rec('pick_result')} | value bets {rec('value_result')} "
-          f"({units:+.2f} units){clv_s} | totals {rec('total_result')} | puck line {rec('pl_result')}")
+          f"({units:+.2f} units){clv_s} | totals {rec('total_result')}{lean_units('total_units')} "
+          f"| puck line {rec('pl_result')}{lean_units('pl_units')}")
 
 
 # ------------------------------------------------------------------------------------------ main
@@ -343,6 +356,11 @@ def run(days: int = 3):
             "p_fav_pl": p_fav_pl, "home_fav": bool(home_fav),
         })
     picks = pd.DataFrame(rows_out)
+    # the price of each lean, so puck line and total leans can be graded in units, not just wins and losses
+    picks["total_odds"] = np.where(picks["total_lean"] == "Over", picks["over_odds"],
+                                   np.where(picks["total_lean"] == "Under", picks["under_odds"], np.nan))
+    home_pl = [isinstance(l, str) and l.startswith(h) for l, h in zip(picks["pl_lean"], picks["home"])]
+    picks["pl_odds"] = np.where(home_pl, picks["home_pl_odds"], picks["away_pl_odds"])
     OUT.mkdir(exist_ok=True)
     for d, sub in picks.groupby("date"):
         sub.to_csv(OUT / f"picks_{d}.csv", index=False)
