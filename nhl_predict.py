@@ -139,7 +139,8 @@ def record(new: pd.DataFrame):
         if gid in prev.index and isinstance(prev.at[gid, "value_side"], str) and prev.at[gid, "value_side"]:
             for c in ("value_side", "value_edge", "value_ml"):
                 fresh.at[i, c] = prev.at[gid, c]
-            fresh.at[i, "value_logged_at"] = prev.at[gid, "value_logged_at"] if isinstance(prev.at[gid, "value_logged_at"], str)                 else prev.at[gid, "logged_at"]
+            first = prev.at[gid, "value_logged_at"]
+            fresh.at[i, "value_logged_at"] = first if isinstance(first, str) else prev.at[gid, "logged_at"]
     OUT.mkdir(exist_ok=True)
     pd.concat([keep, fresh.reindex(columns=COLS)], ignore_index=True).sort_values(["date", "start_utc", "game_id"]).to_csv(LEDGER, index=False)
     return len(fresh)
