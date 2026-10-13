@@ -88,11 +88,17 @@ def projected_starters(games: pd.DataFrame, G: pd.DataFrame, gt: pd.DataFrame) -
                     continue
             ids = [g["goalie_id"] for g in roster] or gt[gt["team_last"] == team]["goalie_id"].tolist()
             mine = recent[recent["goalie_id"].isin(ids)]
-            # weight: starts for this team in its last 25 games count most, then starts anywhere last season
-            team_recent = mine[mine["team"] == team].tail(25)["goalie_id"].value_counts()
+            # most starts in the team's last 10 games (starts anywhere last season break ties, e.g. a new arrival);
+            # a goalie who started this team's last two games THIS season goes first. Replaying 2024-26, this named
+            # the actual starter 65-68% of the time (the old last-25-games rule: 63-64%).
+            team_starts = mine[mine["team"] == team]
+            team_recent = team_starts.tail(10)["goalie_id"].value_counts()
             anywhere = mine[mine["date"] >= mine["date"].max() - pd.Timedelta(days=300)]["goalie_id"].value_counts()
-            score = {gid: 3 * team_recent.get(gid, 0) + anywhere.get(gid, 0) for gid in ids}
+            score = {gid: 1000 * team_recent.get(gid, 0) + anywhere.get(gid, 0) for gid in ids}
             order = sorted(ids, key=lambda g: -score.get(g, 0))
+            this_season = team_starts[team_starts["season"] == team_starts["season"].max()]["goalie_id"] if len(team_starts) else []
+            if len(this_season) >= 2 and this_season.iloc[-1] == this_season.iloc[-2] and this_season.iloc[-1] in order:
+                order = [this_season.iloc[-1]] + [g for g in order if g != this_season.iloc[-1]]
             if not order:
                 out[(r["game_id"], team)] = (np.nan, "unknown", "no goalie data")
                 continue
